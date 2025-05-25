@@ -10,7 +10,7 @@ A demo video showcasing the application functionality and code walkthrough is av
 
 The complete High-Level Design (HLD) and Low-Level Design (LLD) documentation is available in the following document:
 
-[Architecture Documentation](https://docs.google.com/document/d/1example-link-to-your-architecture-doc/edit)
+[Architecture Documentation](https://github.com/Deepanshu41008/PDF_Q-A_APP/blob/main/architecture.md)
 
 This document includes:
 - System overview
@@ -26,7 +26,7 @@ This document includes:
 
 The comprehensive source code documentation is available in the following document:
 
-[Code Documentation](https://docs.google.com/document/d/1example-link-to-your-code-doc/edit)
+[Code Documentation](https://github.com/Deepanshu41008/PDF_Q-A_APP/blob/main/code_documentation.md)
 
 This document includes:
 - Project structure
