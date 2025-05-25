@@ -11,9 +11,17 @@ export default defineConfig({
     hmr: {
       clientPort: 12001
     },
-    allowedHosts: [
-      'work-2-mlwrmwhcbesatuqv.prod-runtime.all-hands.dev',
-      'work-1-mlwrmwhcbesatuqv.prod-runtime.all-hands.dev'
-    ]
+    proxy: {
+      '/api': {
+        target: 'http://localhost:12000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/ws': {
+        target: 'ws://localhost:12000',
+        ws: true,
+        changeOrigin: true
+      }
+    }
   }
 })
