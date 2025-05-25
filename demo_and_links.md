@@ -6,13 +6,6 @@ A demo video showcasing the application functionality and code walkthrough is av
 
 [Demo Video Link](https://drive.google.com/file/d/1example-link-to-your-demo-video/view)
 
-## Hosted Application
-
-The application is hosted and accessible at the following URLs:
-
-- Frontend: [https://work-2-mlwrmwhcbesatuqv.prod-runtime.all-hands.dev](https://work-2-mlwrmwhcbesatuqv.prod-runtime.all-hands.dev)
-- Backend API: [https://work-1-mlwrmwhcbesatuqv.prod-runtime.all-hands.dev:12000](https://work-1-mlwrmwhcbesatuqv.prod-runtime.all-hands.dev:12000)
-
 ## High-Level Design and Architecture Documentation
 
 The complete High-Level Design (HLD) and Low-Level Design (LLD) documentation is available in the following document:
