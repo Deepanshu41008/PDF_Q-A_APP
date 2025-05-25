@@ -38,7 +38,6 @@ This document includes:
 ## Additional Resources
 
 - [Figma Design](https://www.figma.com/file/QHpASp7wGRRcjh0oxCuspL/FullStack-Engineer-Internship-Assignment?type=design&node-id=0-1&mode=design&t=geu9rfpXEecN8eFZ-0) - Original design specifications
-- [GitHub Repository](https://github.com/yourusername/pdf-qa-application) - Source code repository
 - [API Documentation](https://work-1-mlwrmwhcbesatuqv.prod-runtime.all-hands.dev:12000/docs) - FastAPI auto-generated documentation
 
 ## Running the Application Locally
