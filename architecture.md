@@ -1,211 +1,131 @@
-# PDF Question Answering Application - Architecture Documentation
+# PDF Question-Answering Application – Architecture Documentation (2024 rev.)
 
-## High Level Design (HLD)
+---
 
-### System Overview
-The PDF Question Answering application is a full-stack web application that allows users to upload PDF documents and ask questions about their content. The system uses natural language processing to analyze the documents and provide relevant answers based on the document content.
+## 1 · High-Level Design (HLD)
 
-### Architecture Components
-The application follows a client-server architecture with the following main components:
+### 1.1 System Overview  
+The application lets users upload PDF documents and ask natural-language
+questions about their content.  
+Uploaded files are persisted on disk, vectorised with FAISS, and queried by an
+LLM chain (LangChain + OpenAI).
 
-1. **Frontend (Client)**
-   - Built with React.js
-   - Provides user interface for document upload, management, and question asking
-   - Communicates with the backend via RESTful API calls
+```
+┌──────────┐     REST/JSON      ┌──────────┐
+│ React UI │  ───────────────▶ │ FastAPI  │───┐
+└──────────┘                   └──────────┘   │
+   ▲   ▲                                  ┌───▼─────────┐
+   │   └──── file upload / QA ───────────▶│ Services    │
+   │                                       │  Document  │─► Disk (PDFs)
+   │                                       │  Vector    │─► Disk (FAISS)
+   │                                       │  QA/LLM    │─► OpenAI
+   │                                       └────────────┘
+   │
+   └────────── rendered answers ◀───────────────┘
+```
 
-2. **Backend (Server)**
-   - Built with FastAPI
-   - Handles document processing, storage, and retrieval
-   - Processes natural language questions and generates answers
-   - Manages database operations
+---
 
-3. **Database**
-   - SQLite for storing document metadata
-   - File system for storing the actual PDF files
+## 2 · Component Breakdown
 
-4. **NLP Processing**
-   - Uses LangChain for document processing and question answering
-   - Integrates with OpenAI for natural language understanding
-   - Uses FAISS for vector storage and similarity search
+### 2.1 Frontend (React 18 + Vite)
+* **Pages**  
+  `Home.jsx`, `Upload.jsx`, `DocumentView.jsx`
+* **Components**  
+  `DocumentCard`, `FileUpload`, `QuestionForm`, `AnswerDisplay`
+* **Services**  
+  `src/services/api.js` – Axios wrapper (env-driven `VITE_API_URL`)
+* **Build / Dev**  
+  Vite (`vite.config.js`) – proxy to backend (`VITE_BACKEND_URL`, default :12000)
 
-### Data Flow
-1. User uploads a PDF document through the frontend interface
-2. Frontend sends the document to the backend via API
-3. Backend processes the document:
-   - Extracts text from the PDF
-   - Creates vector embeddings of the text
-   - Stores the document metadata in the database
-   - Stores the document file in the file system
-4. User asks a question about a document
-5. Frontend sends the question to the backend
-6. Backend processes the question:
-   - Retrieves the document's vector embeddings
-   - Uses LangChain to find relevant context from the document
-   - Generates an answer using OpenAI
-7. Backend returns the answer to the frontend
-8. Frontend displays the answer to the user
+### 2.2 Backend (FastAPI 0.110)
+* **Application factory** `app/main.py`  
+  – Loads config, initialises DB, registers routers, CORS, global error handler.
+* **Routers**
+  * `/api/documents` → `app/api/routes/documents.py`
+    * `POST /upload`
+    * `GET /` (list)
+    * `GET /{id}`
+    * `DELETE /{id}`
+  * `/api/documents/{id}/ask` → `app/api/routes/questions.py`
+* **Services**  
+  * `app/services/document_service.py` – file I/O, FAISS indexing, helpers  
+  * `app/services/qa_service.py`      – RetrievalQA wrapper (LangChain v0.1)
+* **Models / DB**
+  * `app/models/document.py` (SQLAlchemy 2 typed-ORM)  
+    `id, filename, file_path, index_path, upload_date, title`
+  * `app/models/database.py` – engine, `Base`, `get_db`, `init_db`
+* **Configuration** `app/core/config.py`  
+  Env vars (`OPENAI_API_KEY`, `CORS_ORIGINS`, …), directory constants, OpenAI
+  client bootstrap.
 
-## Low Level Design (LLD)
+### 2.3 Data Stores
+* **SQLite** file `data/pdf_qa.db` – document metadata
+* **File System**  
+  `data/documents/` (PDFs), `data/indices/<id>/vectorstore.pkl` (FAISS)
 
-### Backend Components
+---
 
-#### 1. FastAPI Application
-- **Main Application (`main.py`)**
-  - Initializes the FastAPI application
-  - Sets up CORS middleware
-  - Includes API routers
+## 3 · Detailed Flows
 
-- **API Routes**
-  - **Documents Router (`routes/documents.py`)**
-    - `/api/documents/upload` - Endpoint for uploading PDF documents
-    - `/api/documents` - Endpoint for retrieving all documents
-    - `/api/documents/{id}` - Endpoint for retrieving a specific document
-  
-  - **Questions Router (`routes/questions.py`)**
-    - `/api/documents/{id}/ask` - Endpoint for asking questions about a document
+### 3.1 Document Upload
+1. `FileUpload` sends `multipart/form-data` ⇒ `POST /api/documents/upload`  
+2. Backend validation → `save_uploaded_file()` writes atomically.  
+3. Row inserted; `index_path` set after `db.flush()` to get PK.  
+4. FAISS index built in a background thread (`anyio.to_thread`).  
+5. JSON response → UI updates list.
 
-#### 2. Database Models
-- **Document Model (`models/document.py`)**
-  - Represents a document in the database
-  - Fields: id, title, filename, upload_date, file_path, vector_store_path
+### 3.2 Ask Question
+1. `QuestionForm` posts `{question}` ⇒ `POST /api/documents/{id}/ask`.  
+2. Router off-loads blocking `answer_question()` to a worker thread.  
+3. Service loads FAISS store, runs `RetrievalQA` (OpenAI embeddings).  
+4. Returns `{answer, source_nodes[]}` → displayed in `AnswerDisplay`.
 
-#### 3. Services
-- **Document Service (`services/document_service.py`)**
-  - Handles PDF processing
-  - Extracts text from PDFs using PyMuPDF
-  - Creates vector embeddings using LangChain
-  - Stores documents in the database and file system
+---
 
-- **QA Service (`services/qa_service.py`)**
-  - Handles question answering
-  - Uses LangChain's RetrievalQA to find relevant context
-  - Generates answers using OpenAI
+## 4 · Technology Stack
 
-#### 4. Database
-- **Database Connection (`database.py`)**
-  - Sets up SQLAlchemy connection
-  - Creates database tables
+| Layer         | Library / Tool | Version Pin |
+| ------------- | -------------- | ----------- |
+| API           | FastAPI        | 0.110.1     |
+| ORM / DB      | SQLAlchemy 2   | 2.0.29      |
+| Vector Store  | FAISS-cpu      | 1.8.0       |
+| LLM Orchestration | LangChain | 0.1.16      |
+| PDF Parsing   | PyMuPDF        | 1.23.15     |
+| Client UI     | React          | 18.2.0      |
+| Bundler       | Vite           | 4.4.5       |
 
-### Frontend Components
+---
 
-#### 1. React Application
-- **Main Application (`App.jsx`)**
-  - Sets up routing using React Router
-  - Defines the main layout
+## 5 · Deployment
 
-- **Pages**
-  - **Home Page (`pages/Home.jsx`)**
-    - Displays a list of uploaded documents
-    - Allows navigation to document view
-  
-  - **Upload Page (`pages/Upload.jsx`)**
-    - Provides interface for uploading new documents
-  
-  - **Document View Page (`pages/DocumentView.jsx`)**
-    - Displays document details
-    - Provides interface for asking questions
-    - Shows question history and answers
+| Service  | Default Port | Command                                        |
+| -------- | ------------ | ---------------------------------------------- |
+| Backend  | 12000        | `uvicorn app.main:app --host 0.0.0.0 --port 12000` |
+| Frontend | 12001        | `npm run dev` (Vite proxy → backend)           |
 
-#### 2. Components
-- **Document Card (`components/DocumentCard.jsx`)**
-  - Displays a card for each document in the list
-  
-- **File Upload (`components/FileUpload.jsx`)**
-  - Handles file selection and upload
-  - Validates file types
-  
-- **Question Form (`components/QuestionForm.jsx`)**
-  - Provides input for asking questions
-  
-- **Answer Display (`components/AnswerDisplay.jsx`)**
-  - Renders answers with markdown support
+Static files are written to `./data` which must be writable by the API
+container / process.
 
-#### 3. Services
-- **API Service (`services/api.js`)**
-  - Handles communication with the backend API
-  - Methods for document upload, retrieval, and question asking
+---
 
-### Technology Stack Details
+## 6 · Security & Ops Notes
 
-#### Backend
-- **FastAPI**: Web framework for building APIs
-- **SQLAlchemy**: ORM for database operations
-- **PyMuPDF**: Library for PDF processing
-- **LangChain**: Framework for building LLM applications
-- **FAISS**: Vector database for similarity search
-- **OpenAI**: LLM provider for natural language understanding
+* CORS origins configurable via `CORS_ORIGINS` env (comma-sep).  
+* Upload validation: MIME & extension (`.pdf` only).  
+* Large-file limit enforced at reverse-proxy level (recommend ≤ 20 MB).  
+* Unhandled exceptions logged server-side; client receives `{"detail":"Internal Server Error"}`.  
+* Background tasks use thread-pool (not asyncio) to avoid GIL-bound CPU spikes.
 
-#### Frontend
-- **React**: JavaScript library for building user interfaces
-- **React Router**: Library for routing in React applications
-- **Axios**: HTTP client for API requests
-- **TailwindCSS**: Utility-first CSS framework
-- **React Dropzone**: Library for file uploads
-- **React Markdown**: Library for rendering markdown content
+---
 
-## Deployment Architecture
+## 7 · Roadmap
 
-The application is deployed with the following components:
+1. User auth (JWT + role-based doc access)  
+2. Multi-document / cross-doc QA  
+3. OCR + support for scanned PDFs / images  
+4. Docker / K8s deployment manifests  
+5. Streaming answers with SSE for long responses  
 
-1. **Backend Server**
-   - Runs on port 12000
-   - Handles API requests
-   - Processes documents and questions
+---
 
-2. **Frontend Server**
-   - Runs on port 12001
-   - Serves the React application
-   - Communicates with the backend server
-
-3. **File Storage**
-   - Local file system for storing uploaded PDFs
-   - Separate directory for vector stores
-
-4. **Database**
-   - SQLite database file for storing document metadata
-
-## Security Considerations
-
-1. **CORS Configuration**
-   - Backend configured to accept requests only from allowed origins
-
-2. **File Validation**
-   - Frontend and backend validate file types (PDF only)
-   - Size limits for uploaded files
-
-3. **Error Handling**
-   - Proper error handling for API requests
-   - User-friendly error messages
-
-## Performance Considerations
-
-1. **Document Processing**
-   - Asynchronous processing of PDF documents
-   - Efficient text extraction and chunking
-
-2. **Vector Storage**
-   - FAISS for efficient similarity search
-   - Persistent storage of vector embeddings
-
-3. **API Optimization**
-   - Efficient database queries
-   - Proper indexing for document retrieval
-
-## Future Enhancements
-
-1. **Authentication and Authorization**
-   - User accounts and authentication
-   - Document access control
-
-2. **Advanced Document Processing**
-   - Support for more document types (DOCX, TXT, etc.)
-   - OCR for scanned documents
-
-3. **Enhanced Question Answering**
-   - Multi-document question answering
-   - Follow-up question handling with context
-
-4. **UI Improvements**
-   - Document preview
-   - Advanced search functionality
-   - Mobile-responsive design improvements
