@@ -10,14 +10,14 @@ init_db()     – create tables for all registered models
 """
 from __future__ import annotations
 
-import importlib
 import logging
 import os
 from pathlib import Path
-from typing import Generator, List
+from typing import Generator
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import Session, sessionmaker
 
 # --------------------------------------------------------------------------- #
 # Logging
@@ -27,24 +27,19 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------- #
 # Configuration
 # --------------------------------------------------------------------------- #
-DEFAULT_DB_PATH = Path(__file__).resolve().parents[3] / "data" / "pdf_qa.db"
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DB_PATH}")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///C:/Users/gupta/pdf/PDF_Q-A_APP/backend/data/pdf_qa.db")
 
-# For SQLite we need `check_same_thread=False`
-_is_sqlite = DATABASE_URL.startswith("sqlite")
+# Create engine with appropriate connection arguments
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
-    connect_args={"check_same_thread": False} if _is_sqlite else None,
+    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
 )
 
 # --------------------------------------------------------------------------- #
 # Declarative base & session factory
 # --------------------------------------------------------------------------- #
-class Base(DeclarativeBase):  # type: ignore[override]
-    """Base class for all ORM models."""
-    pass
-
+Base = declarative_base()
 
 SessionLocal = sessionmaker(
     autocommit=False,
@@ -52,7 +47,6 @@ SessionLocal = sessionmaker(
     expire_on_commit=False,
     bind=engine,
 )
-
 
 # --------------------------------------------------------------------------- #
 # FastAPI dependency
@@ -71,28 +65,24 @@ def get_db() -> Generator[Session, None, None]:
     finally:
         db.close()
 
-
 # --------------------------------------------------------------------------- #
-# Model discovery & table creation
+# Database initialization
 # --------------------------------------------------------------------------- #
-# Add new model modules here so `init_db()` creates their tables automatically.
-__all_models__: List[str] = [
-    "app.models.document",
-]
-
-
 def init_db() -> None:
     """
-    Import all models listed in `__all_models__` and create their tables.
+    Initialize database tables for all models.
     Call this once on application startup.
     """
-    for module_path in __all_models__:
-        importlib.import_module(module_path)
-        logger.debug("Imported model module %s", module_path)
-
-    Base.metadata.create_all(bind=engine)
-    logger.info("Database schema initialised (url=%s)", DATABASE_URL)
-
+    try:
+        # Import all models to ensure they're registered with Base
+        from app.models.document import Document
+        
+        # Create all tables
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database schema initialized (url=%s)", DATABASE_URL)
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        raise
 
 __all__ = [
     "Base",

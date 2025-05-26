@@ -7,14 +7,14 @@ Environment variables can be placed in a `.env` file at repository root or
 exported normally. This module guarantees:
 
 1. Directories `data/documents` and `data/indices` always exist.
-2. `OPENAI_API_KEY` is mandatory (clear exception if missing or empty).
-3. `openai` Python client is initialised automatically when present.
+2. OpenAI client is initialized when API key is available.
+3. Configuration for models, CORS, file uploads, and database is provided.
 """
 
 import logging
 import os
 from pathlib import Path
-from typing import Final, Optional, cast
+from typing import Final, Optional, Set, cast
 
 try:
     from dotenv import load_dotenv, find_dotenv
@@ -67,8 +67,22 @@ def _env(
 
 
 # API keys / endpoints ------------------------------------------------------- #
-OPENAI_API_KEY: Final[str] = cast(str, _env("OPENAI_API_KEY", mandatory=True))
+OPENAI_API_KEY: Final[Optional[str]] = _env("OPENAI_API_KEY")
 OPENAI_API_BASE: Final[Optional[str]] = _env("OPENAI_API_BASE")
+
+# Model Configuration -------------------------------------------------------- #
+OPENAI_MODEL: Final[str] = cast(str, _env("OPENAI_MODEL", "gpt-3.5-turbo"))
+EMBEDDING_MODEL: Final[str] = cast(str, _env("EMBEDDING_MODEL", "text-embedding-ada-002"))
+
+# CORS Configuration --------------------------------------------------------- #
+CORS_ORIGINS: Final[str] = cast(str, _env("CORS_ORIGINS", "http://localhost:12001,http://localhost:3000"))
+
+# File upload settings ------------------------------------------------------- #
+MAX_UPLOAD_SIZE: Final[int] = int(_env("MAX_UPLOAD_SIZE", str(20 * 1024 * 1024)) or str(20 * 1024 * 1024))  # 20MB default
+ALLOWED_EXTENSIONS: Final[Set[str]] = {".pdf"}
+
+# Database ------------------------------------------------------------------- #
+# DATABASE_URL will be defined after DATA_DIR is set below
 
 # --------------------------------------------------------------------------- #
 # Filesystem paths
@@ -90,17 +104,31 @@ for _dir in (UPLOAD_DIR, INDEX_DIR):
 
 logger.debug("DATA_DIR set to %s", DATA_DIR)
 
+# now that DATA_DIR is defined, set DATABASE_URL
+DATABASE_URL: Final[str] = cast(
+    str,
+    _env("DATABASE_URL", f"sqlite:///{DATA_DIR}/pdf_qa.db")
+)
+
 # --------------------------------------------------------------------------- #
 # Optional third-party client configuration
 # --------------------------------------------------------------------------- #
-try:
-    import openai  # type: ignore
-
-    openai.api_key = OPENAI_API_KEY
-    if OPENAI_API_BASE:
-        logger.info("Configured OpenAI client with custom base URL %s", OPENAI_API_BASE)
-except ModuleNotFoundError:
-    logger.info("openai package not installed – skipping client configuration")
+openai_client = None
+if OPENAI_API_KEY:
+    try:
+        from openai import OpenAI
+        
+        openai_client = OpenAI(api_key=OPENAI_API_KEY)
+        if OPENAI_API_BASE:
+            openai_client.base_url = OPENAI_API_BASE
+            logger.info("Configured OpenAI client with custom base URL %s", OPENAI_API_BASE)
+        logger.info("OpenAI client initialized successfully")
+    except ModuleNotFoundError:
+        logger.warning("openai package not installed – skipping client configuration")
+    except Exception as e:
+        logger.error(f"Failed to initialize OpenAI client: {e}")
+else:
+    logger.warning("OPENAI_API_KEY not set - QA functionality will not work")
 
 # --------------------------------------------------------------------------- #
 # Public exports
@@ -108,9 +136,16 @@ except ModuleNotFoundError:
 __all__ = [
     "OPENAI_API_KEY",
     "OPENAI_API_BASE",
+    "OPENAI_MODEL",
+    "EMBEDDING_MODEL",
+    "CORS_ORIGINS",
+    "MAX_UPLOAD_SIZE",
+    "ALLOWED_EXTENSIONS",
+    "DATABASE_URL",
     "REPO_ROOT",
     "DATA_DIR",
     "UPLOAD_DIR",
     "INDEX_DIR",
+    "openai_client",
     "_env",
 ]

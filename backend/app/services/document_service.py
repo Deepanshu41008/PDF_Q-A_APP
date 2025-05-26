@@ -23,7 +23,7 @@ import pickle
 import shutil
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, BinaryIO, IO, Optional, Union, overload
+from typing import TYPE_CHECKING, Any, BinaryIO, Optional, Union, overload
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
@@ -204,7 +204,8 @@ def _load_pickle(path: Path) -> Any:
 def create_document_index(document_id: int | str, file_path: Path) -> bool:
     """
     Create a FAISS vector index for *file_path* and persist it under
-    ``INDEX_DIR/<document_id>/vectorstore.pkl``.
+    ``INDEX_DIR/<document_id>/``.
+    
     Returns ``True`` on success, ``False`` otherwise.
     """
     try:
@@ -220,7 +221,11 @@ def create_document_index(document_id: int | str, file_path: Path) -> bool:
         vs = FAISS.from_documents(chunks, OpenAIEmbeddings())
         out_dir = INDEX_DIR / str(document_id)
         out_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save in both formats for backward compatibility
         _dump_pickle(vs, out_dir / "vectorstore.pkl")
+        vs.save_local(str(out_dir))
+        
         logger.info("Vector index created for document %s", document_id)
         return True
     except Exception as exc:  # noqa: BLE001
@@ -232,11 +237,26 @@ def create_document_index(document_id: int | str, file_path: Path) -> bool:
 def get_document_index(document_id: int | str) -> Optional[FAISS]:
     """
     Load the FAISS index for *document_id* or ``None`` if not present / corrupt.
+    
+    Tries both new-style (index.faiss) and old-style (vectorstore.pkl) formats.
     """
-    pkl = INDEX_DIR / str(document_id) / "vectorstore.pkl"
+    doc_id_str = str(document_id)
+    index_dir = INDEX_DIR / doc_id_str
+    
+    # Try new-style index first
+    if (index_dir / "index.faiss").exists():
+        try:
+            embeddings = OpenAIEmbeddings()
+            return FAISS.load_local(str(index_dir), embeddings)
+        except Exception as exc:
+            logger.error("Failed to load new-style index for %s: %s", document_id, exc)
+    
+    # Fall back to old-style pickle
+    pkl = index_dir / "vectorstore.pkl"
     if not pkl.exists():
         logger.warning("Index not found for document %s", document_id)
         return None
+        
     try:
         index = _load_pickle(pkl)
         if not isinstance(index, FAISS):

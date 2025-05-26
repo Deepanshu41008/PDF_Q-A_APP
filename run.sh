@@ -4,7 +4,6 @@
 echo "Installing backend dependencies..."
 cd backend
 pip install -r requirements.txt
-
 # Start backend server in the background
 echo "Starting backend server..."
 python run.py &

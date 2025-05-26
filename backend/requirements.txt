@@ -1,22 +1,25 @@
 # --------------------------------------------------------------------------- #
 # Core framework
-fastapi==0.110.1            # Web framework (compatible with Pydantic v1)
+fastapi==0.110.1            # Web framework
 uvicorn[standard]==0.29.0    # ASGI server with auto-reload & extras
 python-multipart==0.0.9      # Needed for FastAPI file uploads
-pydantic==1.10.14            # Data validation / settings (FastAPI still v1)
+pydantic==2.6.4             # Data validation (v2 for FastAPI 0.110+)
+pydantic-settings==2.2.1     # Settings management
 
 # --------------------------------------------------------------------------- #
 # Database / ORM
 sqlalchemy==2.0.29           # Typed ORM (v2 API)
 aiofiles==23.2.1             # Async file utilities for FastAPI
-typing-extensions==4.11.0    # Forward compatibility for Python <3.12
+typing-extensions==4.11.0    # Forward compatibility
 
 # --------------------------------------------------------------------------- #
 # LLM / Vector-DB toolchain
 langchain==0.1.16            # High-level LLM orchestration
 langchain-community==0.0.32  # Connectors / loaders incl. PyMuPDF
+langchain-openai==0.1.3      # OpenAI integration for LangChain
 openai==1.21.0               # OpenAI client
 faiss-cpu==1.8.0             # Vector store (CPU build)
+tiktoken==0.6.0              # Token counting for OpenAI
 
 # --------------------------------------------------------------------------- #
 # PDF processing
@@ -28,4 +31,4 @@ python-dotenv==1.0.1         # Load .env files
 
 # --------------------------------------------------------------------------- #
 # Concurrency / async
-anyio==4.3.0                 # FastAPI's async runner (explicit pin)
+anyio==4.3.0                 # FastAPI's async runner

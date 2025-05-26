@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import shutil
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 from fastapi import (
@@ -17,7 +17,7 @@ from fastapi import (
 )
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, Field, validator
 from starlette import status
 
 from app.models.database import get_db
@@ -28,9 +28,13 @@ from app.services.document_service import (
     save_uploaded_file,
 )
 
+# Constants for file validation
+ALLOWED_EXTENSIONS = {".pdf"}
+MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20MB
+
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/documents", tags=["documents"])
+router = APIRouter()  # Removed prefix
 
 
 # --------------------------------------------------------------------------- #
@@ -40,12 +44,19 @@ class DocumentOut(BaseModel):
     id: int
     filename: str
     title: str
-    upload_date: datetime
-    index_path: Optional[str] | None
+    uploadDate: datetime = Field(..., alias="upload_date")
+    indexPath: Optional[str] | None = Field(None, alias="index_path")
+    fileSize: Optional[int] = Field(None, alias="file_size")
+    pageCount: Optional[int] = Field(None, alias="page_count")
+    isIndexed: bool = Field(False, alias="is_indexed")
 
     @validator("upload_date", pre=True, always=True)
     def _serialize_dt(cls, dt: datetime):  # noqa: D401, N805
         return dt.isoformat()
+    
+    @validator("is_indexed", pre=True, always=True)
+    def _check_indexed(cls, _, values):  # noqa: D401, N805
+        return values.get("index_path") is not None
 
 
 # --------------------------------------------------------------------------- #
@@ -89,9 +100,24 @@ async def upload_document(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Filename is required"
         )
-    if not file.filename.lower().endswith(".pdf"):
+    
+    # Validate file extension
+    file_ext = Path(file.filename).suffix.lower()
+    if file_ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF files are allowed"
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=f"Invalid file type. Allowed types: {', '.join(ALLOWED_EXTENSIONS)}"
+        )
+    
+    # Check file size
+    file.file.seek(0, 2)  # Seek to end
+    file_size = file.file.tell()
+    file.file.seek(0)  # Reset to beginning
+    
+    if file_size > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File too large. Maximum size: {MAX_UPLOAD_SIZE / 1024 / 1024:.1f}MB"
         )
 
     # ------------------------------ Save file --------------------------- #
@@ -111,6 +137,7 @@ async def upload_document(
             filename=file_path.name,
             file_path=str(file_path),
             title=title or file_path.name,
+            file_size=file_size,
         )
         db.add(db_document)
         db.flush()  # allocate primary-key
@@ -145,13 +172,46 @@ async def upload_document(
     return db_document
 
 @router.get("/", response_model=list[DocumentOut])
-async def list_documents(db: Session = Depends(get_db)):
-    docs = db.execute(select(Document).order_by(Document.upload_date.desc())).scalars().all()
+async def list_documents(
+    skip: int = 0, 
+    limit: int = 100, 
+    db: Session = Depends(get_db)
+):
+    """
+    Get all documents with pagination.
+    
+    Args:
+        skip: Number of records to skip
+        limit: Maximum number of records to return
+        db: Database session
+    
+    Returns:
+        List of document objects
+    """
+    docs = db.execute(
+        select(Document)
+        .order_by(Document.upload_date.desc())
+        .offset(skip)
+        .limit(limit)
+    ).scalars().all()
     return docs
 
 
 @router.get("/{document_id}", response_model=DocumentOut)
 async def get_document(document_id: int, db: Session = Depends(get_db)):
+    """
+    Get a specific document by ID.
+    
+    Args:
+        document_id: The ID of the document to retrieve
+        db: Database session
+    
+    Returns:
+        Document object
+    
+    Raises:
+        HTTPException: If document not found
+    """
     doc = db.get(Document, document_id)
     if doc is None:
         raise HTTPException(
@@ -164,6 +224,13 @@ async def get_document(document_id: int, db: Session = Depends(get_db)):
 async def delete_document(document_id: int, db: Session = Depends(get_db)):
     """
     Remove the PDF, its FAISS index directory, and the DB record.
+    
+    Args:
+        document_id: The ID of the document to delete
+        db: Database session
+    
+    Raises:
+        HTTPException: If document not found
     """
     doc = db.execute(select(Document).where(Document.id == document_id)).scalar_one_or_none()
     if doc is None:
@@ -177,3 +244,5 @@ async def delete_document(document_id: int, db: Session = Depends(get_db)):
 
     db.delete(doc)
     db.commit()
+    
+    return {"message": "Document deleted successfully"}

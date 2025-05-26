@@ -15,7 +15,7 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:12000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
+        // Do NOT rewrite! /api/documents/... must reach backend as /api/documents/...
       },
       '/ws': {
         target: 'ws://localhost:12000',
