@@ -66,10 +66,12 @@ A full-stack application that allows users to upload PDF documents and ask quest
    ```
 
 3. Set up environment variables:
-   Create a `.env` file in the backend directory with the following variables:
+   Create a `.env` file in the **repository root directory** (e.g., next to `run.sh` and the `backend` folder).
+   Add the following variable to the `.env` file:
    ```
-   OPENAI_API_KEY=your_openai_api_key
+   OPENAI_API_KEY="your_openai_api_key_here"
    ```
+   **Note:** The `OPENAI_API_KEY` is essential for the question-answering functionality. If this key is not provided or is invalid, uploading and indexing documents will still work, but you will not be able to ask questions about them.
 
 4. Run the server:
    ```
