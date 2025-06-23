@@ -67,11 +67,17 @@ A full-stack application that allows users to upload PDF documents and ask quest
 
 3. Set up environment variables:
    Create a `.env` file in the **repository root directory** (e.g., next to `run.sh` and the `backend` folder).
-   Add the following variable to the `.env` file:
+   Add the following essential variable to the `.env` file:
    ```
-   OPENAI_API_KEY="your_openai_api_key_here"
+   OPENROUTER_API_KEY="your_openrouter_api_key_here"
    ```
-   **Note:** The `OPENAI_API_KEY` is essential for the question-answering functionality. If this key is not provided or is invalid, uploading and indexing documents will still work, but you will not be able to ask questions about them.
+   **Note:** The `OPENROUTER_API_KEY` is essential for all question-answering and document embedding functionalities. If this key is not provided or is invalid, the application will not be able to process documents or answer questions.
+
+   The application is configured by default to use OpenRouter with the following settings (which can also be overridden by adding them to your `.env` file):
+   - `LLM_API_BASE="https://openrouter.ai/api/v1"` (OpenRouter API endpoint)
+   - `CHAT_MODEL_NAME="sarvamai/sarvam-m:free"` (The chat model for Q&A)
+   - `EMBEDDING_MODEL="text-embedding-ada-002"` (The model for creating document embeddings, accessed via OpenRouter)
+   ```
 
 4. Run the server:
    ```

@@ -25,7 +25,7 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, BinaryIO, Optional, Union, overload
 
-from app.core.config import UPLOAD_DIR, INDEX_DIR # Import from config
+from app.core.config import UPLOAD_DIR, INDEX_DIR, OPENROUTER_API_KEY, LLM_API_BASE, EMBEDDING_MODEL # Import from config
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import OpenAIEmbeddings
@@ -201,7 +201,12 @@ def create_document_index(document_id: int | str, file_path: Path) -> bool:
             chunk_size=_CHUNK_SIZE, chunk_overlap=_CHUNK_OVERLAP
         ).split_documents(docs)
 
-        vs = FAISS.from_documents(chunks, OpenAIEmbeddings())
+        embeddings = OpenAIEmbeddings(
+            model=EMBEDDING_MODEL,
+            openai_api_key=OPENROUTER_API_KEY,
+            openai_api_base=LLM_API_BASE
+        )
+        vs = FAISS.from_documents(chunks, embeddings)
         out_dir = INDEX_DIR / str(document_id)
         out_dir.mkdir(parents=True, exist_ok=True)
         
@@ -229,7 +234,11 @@ def get_document_index(document_id: int | str) -> Optional[FAISS]:
     # Try new-style index first
     if (index_dir / "index.faiss").exists():
         try:
-            embeddings = OpenAIEmbeddings()
+            embeddings = OpenAIEmbeddings(
+                model=EMBEDDING_MODEL,
+                openai_api_key=OPENROUTER_API_KEY,
+                openai_api_base=LLM_API_BASE
+            )
             return FAISS.load_local(str(index_dir), embeddings)
         except Exception as exc:
             logger.error("Failed to load new-style index for %s: %s", document_id, exc)

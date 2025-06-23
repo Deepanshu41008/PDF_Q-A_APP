@@ -6,7 +6,7 @@ from typing import Any, Dict, List
 from langchain.chains import RetrievalQA
 from langchain_community.chat_models import ChatOpenAI
 
-from app.core.config import OPENAI_API_KEY, OPENAI_MODEL
+from app.core.config import OPENROUTER_API_KEY, LLM_API_BASE, CHAT_MODEL_NAME
 from app.services.document_service import get_document_index
 
 logger = logging.getLogger(__name__)
@@ -23,10 +23,10 @@ def answer_question(document_id: int, question: str) -> Dict[str, Any]:
         Dict with 'answer' and 'source_nodes' or 'error'
     """
     try:
-        # Check for OpenAI API key
-        if not OPENAI_API_KEY:
-            logger.error("OpenAI API key not configured")
-            return {"error": "OpenAI API key not configured. Please set OPENAI_API_KEY environment variable."}
+        # Check for OpenRouter API key
+        if not OPENROUTER_API_KEY:
+            logger.error("OpenRouter API key not configured")
+            return {"error": "OpenRouter API key not configured. Please set OPENROUTER_API_KEY environment variable."}
         
         # Get vector store
         vectorstore = get_document_index(document_id)
@@ -40,11 +40,12 @@ def answer_question(document_id: int, question: str) -> Dict[str, Any]:
             search_kwargs={"k": 3}
         )
         
-        # Create LLM with API key
+        # Create LLM with API key and base URL for OpenRouter
         llm = ChatOpenAI(
-            model_name=OPENAI_MODEL,
+            model_name=CHAT_MODEL_NAME,
             temperature=0,
-            openai_api_key=OPENAI_API_KEY
+            openai_api_key=OPENROUTER_API_KEY,
+            openai_api_base=LLM_API_BASE
         )
         
         # Create QA chain

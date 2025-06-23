@@ -67,12 +67,12 @@ def _env(
 
 
 # API keys / endpoints ------------------------------------------------------- #
-OPENAI_API_KEY: Final[Optional[str]] = _env("OPENAI_API_KEY")
-OPENAI_API_BASE: Final[Optional[str]] = _env("OPENAI_API_BASE")
+OPENROUTER_API_KEY: Final[Optional[str]] = _env("OPENROUTER_API_KEY", mandatory=True)
+LLM_API_BASE: Final[Optional[str]] = _env("LLM_API_BASE", "https://openrouter.ai/api/v1")
 
 # Model Configuration -------------------------------------------------------- #
-OPENAI_MODEL: Final[str] = cast(str, _env("OPENAI_MODEL", "gpt-3.5-turbo"))
-EMBEDDING_MODEL: Final[str] = cast(str, _env("EMBEDDING_MODEL", "text-embedding-ada-002"))
+CHAT_MODEL_NAME: Final[str] = cast(str, _env("CHAT_MODEL_NAME", "sarvamai/sarvam-m:free"))
+EMBEDDING_MODEL: Final[str] = cast(str, _env("EMBEDDING_MODEL", "text-embedding-ada-002")) # Assuming this model name is compatible with OpenRouter or used with specific settings
 
 # CORS Configuration --------------------------------------------------------- #
 CORS_ORIGINS: Final[str] = cast(str, _env("CORS_ORIGINS", "http://localhost:12001,http://localhost:3000"))
@@ -113,30 +113,27 @@ DATABASE_URL: Final[str] = cast(
 # --------------------------------------------------------------------------- #
 # Optional third-party client configuration
 # --------------------------------------------------------------------------- #
-openai_client = None
-if OPENAI_API_KEY:
+llm_client = None
+if OPENROUTER_API_KEY:
     try:
-        from openai import OpenAI
+        from openai import OpenAI # Keep using openai library for OpenAI-compatible APIs
         
-        openai_client = OpenAI(api_key=OPENAI_API_KEY)
-        if OPENAI_API_BASE:
-            openai_client.base_url = OPENAI_API_BASE
-            logger.info("Configured OpenAI client with custom base URL %s", OPENAI_API_BASE)
-        logger.info("OpenAI client initialized successfully")
+        llm_client = OpenAI(api_key=OPENROUTER_API_KEY, base_url=LLM_API_BASE)
+        logger.info("LLM client initialized successfully for OpenRouter.")
     except ModuleNotFoundError:
-        logger.warning("openai package not installed – skipping client configuration")
+        logger.warning("openai package not installed – skipping LLM client configuration")
     except Exception as e:
-        logger.error(f"Failed to initialize OpenAI client: {e}")
+        logger.error(f"Failed to initialize LLM client: {e}")
 else:
-    logger.warning("OPENAI_API_KEY not set - QA functionality will not work")
+    logger.warning("OPENROUTER_API_KEY not set - LLM functionality will not work")
 
 # --------------------------------------------------------------------------- #
 # Public exports
 # --------------------------------------------------------------------------- #
 __all__ = [
-    "OPENAI_API_KEY",
-    "OPENAI_API_BASE",
-    "OPENAI_MODEL",
+    "OPENROUTER_API_KEY",
+    "LLM_API_BASE",
+    "CHAT_MODEL_NAME",
     "EMBEDDING_MODEL",
     "CORS_ORIGINS",
     "MAX_UPLOAD_SIZE",
@@ -146,6 +143,6 @@ __all__ = [
     "DATA_DIR",
     "UPLOAD_DIR",
     "INDEX_DIR",
-    "openai_client",
+    "llm_client", # Renamed from openai_client
     "_env",
 ]
